@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- place 2 -->
+<beans
+    default-destroy-method="destroy"
+    default-init-method="afterPropertiesSet"
+    xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd"
+>
+
+    <!--<bean id="ldapToPortalConverter" class="com.liferay.portal.security.ldap.DefaultLDAPToPortalConverter" />-->
+    <bean id="com.liferay.portal.security.ldap.PortalLDAPImporterUtil" class="com.liferay.portal.security.ldap.PortalLDAPImporterUtil">
+        <property name="portalLDAPImporter">
+            <bean class="com.bosch.osmi.sw360.ldapAdapter.CustomPortalLDAPImporterImpl">
+                <property name="LDAPToPortalConverter" ref="ldapToPortalConverter" />
+            </bean>
+        </property>
+    </bean>
+</beans>
