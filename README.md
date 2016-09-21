@@ -20,6 +20,12 @@ name.
   the organization.
   
 ### Compilation
+If custom organization mappings are to be used, ldapimporter.properties should
+be configured before building the project. It is recommended to just
+set system.config.path in `ldapAdapterEXT-ext-impl/**/resources/ldapimporter.properties`
+and put a copy of ldapimporter.properties in a system-wide settings folder, e.g.
+`/etc/ldap-importer`. The rest of configuration should be done there.
+
 One can create the war-files with the command `mvn package`.
 
 ### Deployment
