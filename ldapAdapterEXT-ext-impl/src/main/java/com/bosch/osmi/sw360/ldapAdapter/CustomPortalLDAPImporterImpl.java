@@ -22,6 +22,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
@@ -30,24 +31,18 @@ import static org.apache.log4j.LogManager.getLogger;
 public class CustomPortalLDAPImporterImpl extends PortalLDAPImporterImpl {
 	private static final String MAPPING_KEYS_PREFIX = "mapping.";
 	private static final String MAPPING_VALUES_SUFFIX = ".target";
-	private boolean matchPrefix = false;
-	private Map<String, String> organizationMappings;
-	private boolean defaultToNull = false;
+	private static boolean matchPrefix = false;
+	private static List<Map.Entry<String, String>> sortedOrganizationMappings;
+	private static boolean customMappingEnabled = false;
 	private Logger log = Logger.getLogger(CustomPortalLDAPImporterImpl.class);
 	private static String ORGANIZATION_KEY_KEY = "organization";
-	private static final String SYSTEM_CONFIGURATION_PATH_KEY = "system.config.path";
 	private static final String MATCH_PREFIX_KEY = "match.prefix";
-	private static final String DEFAULT_TO_NULL_KEY = "default.to.none";
+	private static final String ENABLE_CUSTOM_MAPPING_KEY = "enable.custom.mapping";
 	private static final String PROPERTIES_FILE_PATH = "/ldapimporter.properties";
-
-	private static String SYSTEM_CONFIGURATION_PATH = "";
+	private static final String SYSTEM_CONFIGURATION_PATH = "/etc/ldap-importer";
 
 	static {
-		Properties localProperties = loadProperties(CustomPortalLDAPImporterImpl.class, PROPERTIES_FILE_PATH, false);
-		String sysConfigPath = localProperties.getProperty(SYSTEM_CONFIGURATION_PATH_KEY);
-		if (sysConfigPath != null && sysConfigPath.length() != 0){
-			SYSTEM_CONFIGURATION_PATH = sysConfigPath;
-		}
+		loadLDAPImporterProperties();
 	}
 
 	public CustomPortalLDAPImporterImpl(){
@@ -166,25 +161,25 @@ public class CustomPortalLDAPImporterImpl extends PortalLDAPImporterImpl {
 	}
 
 	private String mapOrganizationName(String name) {
-		loadLDAPImporterProperties();
-		String defaultTarget = defaultToNull ? null : name;
+		String defaultTarget = customMappingEnabled ? null : name;
+		Predicate<Map.Entry<String, String>> matcher;
 
 		if (matchPrefix) {
-			return organizationMappings.keySet().stream()
-					.filter(name::startsWith)
-					.sorted(Comparator.comparing(String::length).reversed())
-					.findFirst()
-					.map(organizationMappings::get)
-					.orElse(defaultTarget);
+			matcher = e -> name.startsWith(e.getKey());
 		} else { // match complete name
-			return organizationMappings.getOrDefault(name, defaultTarget);
+			matcher = name::equals;
 		}
+		return sortedOrganizationMappings.stream()
+				.filter(matcher)
+				.findFirst()
+				.map(Map.Entry::getValue)
+				.orElse(defaultTarget);
 	}
 
-	private void loadLDAPImporterProperties() {
-		Properties ldapConfigProperties = loadProperties(CustomPortalLDAPImporterImpl.class, PROPERTIES_FILE_PATH);
+	private static void loadLDAPImporterProperties() {
+		Properties ldapConfigProperties = loadProperties();
 		matchPrefix = Boolean.parseBoolean(ldapConfigProperties.getProperty(MATCH_PREFIX_KEY, "false"));
-		defaultToNull = Boolean.parseBoolean(ldapConfigProperties.getProperty(DEFAULT_TO_NULL_KEY, "false"));
+		customMappingEnabled = Boolean.parseBoolean(ldapConfigProperties.getProperty(ENABLE_CUSTOM_MAPPING_KEY, "false"));
 
 		List<Object> mappingSourceKeys = ldapConfigProperties
 				.keySet()
@@ -192,49 +187,45 @@ public class CustomPortalLDAPImporterImpl extends PortalLDAPImporterImpl {
 				.filter(p -> ((String) p).startsWith(MAPPING_KEYS_PREFIX) && !((String) p).endsWith(MAPPING_VALUES_SUFFIX))
 				.collect(Collectors.toList());
 
-		organizationMappings = new HashMap<>();
+		Map<String, String> tempOrgMappings = new HashMap<>();
 		for (Object sourceKey : mappingSourceKeys) {
 			String sourceOrg = ldapConfigProperties.getProperty((String)sourceKey);
 			String targetOrg = ldapConfigProperties.getProperty(sourceKey+MAPPING_VALUES_SUFFIX);
 			if (sourceOrg != null && targetOrg != null && sourceOrg.length() > 0 && targetOrg.length() > 0) {
-				organizationMappings.put(sourceOrg, targetOrg);
+				tempOrgMappings.put(sourceOrg, targetOrg);
 			}
 		}
+		sortedOrganizationMappings = tempOrgMappings
+				.entrySet()
+				.stream()
+				.sorted(((Comparator<Map.Entry<String, String>>) (o1, o2) -> Integer.compare(o1.getKey().length(),
+						o2.getKey().length()))
+						.reversed())
+				.collect(Collectors.toList());
 	}
 
 	/**
-	 * Copied from https://github.com/sw360/sw360portal/blob/master/libraries/lib-datahandler/src/main/java/com/siemens/sw360/datahandler/common/CommonUtils.java
+	 * Adapted from https://github.com/sw360/sw360portal/blob/master/libraries/lib-datahandler/src/main/java/com/siemens/sw360/datahandler/common/CommonUtils.java
 	 */
-	private static Properties loadProperties(Class<?> clazz, String propertiesFilePath) {
-		return loadProperties(clazz, propertiesFilePath, true);
-	}
-
-	/**
-	 * Copied from https://github.com/sw360/sw360portal/blob/master/libraries/lib-datahandler/src/main/java/com/siemens/sw360/datahandler/common/CommonUtils.java
-	 */
-	private static Properties loadProperties(Class<?> clazz, String propertiesFilePath, boolean useSystemConfig) {
+	private static Properties loadProperties() {
 		Properties props = new Properties();
+		Class clazz = CustomPortalLDAPImporterImpl.class;
 
-		try (InputStream resourceAsStream = clazz.getResourceAsStream(propertiesFilePath)) {
+		try (InputStream resourceAsStream = clazz.getResourceAsStream(PROPERTIES_FILE_PATH)) {
 			if (resourceAsStream == null)
-				throw new IOException("cannot open " + propertiesFilePath);
+				throw new IOException("cannot open " + PROPERTIES_FILE_PATH);
 
 			props.load(resourceAsStream);
 		} catch (IOException e) {
-			getLogger(clazz).error("Error opening resources " + propertiesFilePath + ".", e);
+			getLogger(clazz).error("Error opening resources " + PROPERTIES_FILE_PATH + ".", e);
 		}
 
-		if(useSystemConfig){
-			File systemPropertiesFile = new File(SYSTEM_CONFIGURATION_PATH, propertiesFilePath);
-			if(systemPropertiesFile.exists()){
-				try (InputStream resourceAsStream = new FileInputStream(systemPropertiesFile.getPath())) {
-					if (resourceAsStream == null)
-						throw new IOException("cannot open " + systemPropertiesFile.getPath());
-
-					props.load(resourceAsStream);
-				} catch (IOException e) {
-					getLogger(clazz).error("Error opening resources " + systemPropertiesFile.getPath() + ".", e);
-				}
+		File systemPropertiesFile = new File(SYSTEM_CONFIGURATION_PATH, PROPERTIES_FILE_PATH);
+		if(systemPropertiesFile.exists()){
+			try (InputStream resourceAsStream = new FileInputStream(systemPropertiesFile.getPath())) {
+				props.load(resourceAsStream);
+			} catch (IOException e) {
+				getLogger(clazz).error("Error opening resources " + systemPropertiesFile.getPath() + ".", e);
 			}
 		}
 		return props;

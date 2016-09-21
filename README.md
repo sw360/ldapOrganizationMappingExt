@@ -20,17 +20,16 @@ name.
   the organization.
   
 ### Compilation
-If custom organization mappings are to be used, ldapimporter.properties should
-be configured before building the project. It is recommended to just
-set system.config.path in `ldapAdapterEXT-ext-impl/**/resources/ldapimporter.properties`
-and put a copy of ldapimporter.properties in a system-wide settings folder, e.g.
-`/etc/ldap-importer`. The rest of configuration should be done there.
-
 One can create the war-files with the command `mvn package`.
 
 ### Deployment
 One should deploy this plugin before all other things. It is even recommended to
 start with a clean database.
+
+If custom organization mappings are to be used, `ldapimporter.properties` should
+be configured beforehand. Copy `ldapAdapterEXT-ext-impl/**/resources/ldapimporter.properties`
+to `/etc/ldap-importer` and adjust the settings as described therein. Properties
+are loaded during server startup.
 
 Steps to do after copying the two war files to the liferay deploy folder:
 1. ensure that liferay is running and that the auto-deploy-scanner has extracted
