@@ -26,6 +26,11 @@ One can create the war-files with the command `mvn package`.
 One should deploy this plugin before all other things. It is even recommended to
 start with a clean database.
 
+If custom organization mappings are to be used, `ldapimporter.properties` should
+be configured beforehand. Copy `ldapAdapterEXT-ext-impl/**/resources/ldapimporter.properties`
+to `/etc/ldap-importer` and adjust the settings as described therein. Properties
+are loaded during server startup.
+
 Steps to do after copying the two war files to the liferay deploy folder:
 1. ensure that liferay is running and that the auto-deploy-scanner has extracted
   and deployed the war files
